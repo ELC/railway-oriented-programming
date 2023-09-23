@@ -1,49 +1,16 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
-from functools import reduce
-from typing import Any, Callable, Generic, Optional, ParamSpec, TypeVar
-
-T = TypeVar("T")
-U = TypeVar("U")
-W = TypeVar("W")
-P = ParamSpec("P")
-
-
-def add_one(x: int) -> int:
-    return x + 1
-
-
-def convert_to_string(x: int) -> str:
-    return str(x)
-
-
-def sort_characters(x: str) -> str:
-    return "".join(sorted(x))
-
-
-def compose(f: Callable[P, U], g: Callable[[U], W]) -> Callable[P, W]:
-    def inner(*args: P.args, **kwargs: P.kwargs) -> W:
-        return g(f(*args, **kwargs))
-
-    return inner
-
+from composable import Composable
+from composable_functions import *
+from compose import compose
+from pipe import pipe
+from pipe_eager import PipeEager
+from pipe_iterative import pipe_iterative
+from pipe_lazy import PipeLazy
+from pipe_lazy_with_start import PipeLazyWithStart
 
 test_compose = compose(
     compose(compose(compose(add_one, convert_to_string), sort_characters), len), str
 )
 assert test_compose(2) == "1"
-
-
-def identity(x: T) -> T:
-    return x
-
-
-def pipe_iterative(*functions: Callable[..., Any]) -> Callable[..., Any]:
-    composed_function = identity
-    for function in functions:
-        composed_function = compose(composed_function, function)
-    return composed_function
 
 
 test_pipe_iterative = pipe_iterative(
@@ -52,27 +19,12 @@ test_pipe_iterative = pipe_iterative(
 assert test_pipe_iterative(2) == "1"
 
 
-def pipe(*functions: Callable[..., Any]) -> Callable[..., Any]:
-    return reduce(compose, functions, identity)
-
-
 test_pipe = pipe(add_one, convert_to_string, sort_characters, len, str)
 assert test_pipe(2) == "1"
 
 
-@dataclass
-class Pipe(Generic[T]):
-    x: T
-
-    def then(self, f: Callable[[T], W]) -> Pipe[W]:
-        return Pipe(f(self.x))
-
-    def __call__(self) -> T:
-        return self.x
-
-
 test_pipe_class = (
-    Pipe(2)
+    PipeEager(2)
     .then(add_one)
     .then(convert_to_string)
     .then(sort_characters)
@@ -81,17 +33,6 @@ test_pipe_class = (
 )
 
 assert test_pipe_class() == "1"
-
-
-@dataclass
-class PipeLazyWithStart(Generic[P, W]):
-    f: Callable[P, W]
-
-    def then(self, g: Callable[[W], U]) -> PipeLazyWithStart[P, U]:
-        return PipeLazyWithStart(compose(self.f, g))
-
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> W:
-        return self.f(*args, **kwargs)
 
 
 test_pipe_with_start = (
@@ -105,24 +46,6 @@ test_pipe_with_start = (
 assert test_pipe_with_start(2) == "1"
 
 
-@dataclass
-class PipeLazy(Generic[P, W]):
-    f: Optional[Callable[P, W]] = None
-
-    def start(self, f: Callable[P, W]) -> PipeLazy[P, W]:
-        return PipeLazy(f)
-
-    def then(self, g: Callable[[W], U]) -> PipeLazy[P, U]:
-        if not self.f:
-            raise ValueError()
-        return PipeLazy(compose(self.f, g))
-
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> W:
-        if not self.f:
-            raise ValueError()
-        return self.f(*args, **kwargs)
-
-
 test_pipe_lazy = (
     PipeLazy[[int], int]()
     .start(add_one)
@@ -130,6 +53,22 @@ test_pipe_lazy = (
     .then(sort_characters)
     .then(len)
     .then(str)
+)
+
+assert test_pipe_lazy(2) == "1"
+
+
+@Composable
+def convert_to_string_decorated(x: int) -> str:
+    return str(x)
+
+
+test_pipe_lazy = (
+    Composable(add_one)
+    >> convert_to_string_decorated
+    >> Composable(sort_characters)
+    >> len
+    >> str
 )
 
 assert test_pipe_lazy(2) == "1"

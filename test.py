@@ -1,58 +1,63 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, TypeVar, Callable, Generic, ParamSpec
-
-
 from functools import reduce
+from typing import Any, Callable, Generic, Optional, ParamSpec, TypeVar
 
 T = TypeVar("T")
 U = TypeVar("U")
 W = TypeVar("W")
 P = ParamSpec("P")
 
+
+def add_one(x: int) -> int:
+    return x + 1
+
+
+def convert_to_string(x: int) -> str:
+    return str(x)
+
+
+def sort_characters(x: str) -> str:
+    return "".join(sorted(x))
+
+
 def compose(f: Callable[P, U], g: Callable[[U], W]) -> Callable[P, W]:
     def inner(*args: P.args, **kwargs: P.kwargs) -> W:
         return g(f(*args, **kwargs))
+
     return inner
+
+
+test_compose = compose(
+    compose(compose(compose(add_one, convert_to_string), sort_characters), len), str
+)
+assert test_compose(2) == "1"
+
 
 def identity(x: T) -> T:
     return x
 
 
-def add_one(x: int) -> int:
-    return x + 1
-
-def convert_to_string(x: int) -> str:
-    return str(x)
-
-def count_letters(x: str) -> int:
-    return len(x)
-
-
-test_ = compose(compose(add_one, convert_to_string), count_letters)
-assert test_(2) == 1
-
-
-def pipe_iterative(*functions):
+def pipe_iterative(*functions: Callable[..., Any]) -> Callable[..., Any]:
     composed_function = identity
     for function in functions:
         composed_function = compose(composed_function, function)
     return composed_function
 
-test_ = pipe_iterative(add_one, convert_to_string, count_letters)
-assert test_(2) == 1
+
+test_pipe_iterative = pipe_iterative(
+    add_one, convert_to_string, sort_characters, len, convert_to_string
+)
+assert test_pipe_iterative(2) == "1"
 
 
-def pipe(*functions):
-    return reduce(
-        compose,
-        functions,
-        identity
-    )
+def pipe(*functions: Callable[..., Any]) -> Callable[..., Any]:
+    return reduce(compose, functions, identity)
 
-test_ = pipe(add_one, convert_to_string, count_letters)
-assert test_(2) == 1
+
+test_pipe = pipe(add_one, convert_to_string, sort_characters, len, str)
+assert test_pipe(2) == "1"
 
 
 @dataclass
@@ -61,20 +66,21 @@ class Pipe(Generic[T]):
 
     def then(self, f: Callable[[T], W]) -> Pipe[W]:
         return Pipe(f(self.x))
-    
+
     def __call__(self) -> T:
         return self.x
 
 
-test_pipe = (
+test_pipe_class = (
     Pipe(2)
     .then(add_one)
     .then(convert_to_string)
-    .then(count_letters)
+    .then(sort_characters)
+    .then(len)
+    .then(str)
 )
 
-assert test_pipe() == 1
-
+assert test_pipe_class() == "1"
 
 
 @dataclass
@@ -88,14 +94,15 @@ class PipeLazyWithStart(Generic[P, W]):
         return self.f(*args, **kwargs)
 
 
-test_pipe = (
+test_pipe_with_start = (
     PipeLazyWithStart(add_one)
     .then(convert_to_string)
-    .then(count_letters)
+    .then(sort_characters)
+    .then(len)
+    .then(str)
 )
 
-assert test_pipe(2) == 1
-
+assert test_pipe_with_start(2) == "1"
 
 
 @dataclass
@@ -116,11 +123,13 @@ class PipeLazy(Generic[P, W]):
         return self.f(*args, **kwargs)
 
 
-test_pipe = (
+test_pipe_lazy = (
     PipeLazy[[int], int]()
     .start(add_one)
     .then(convert_to_string)
-    .then(count_letters)
+    .then(sort_characters)
+    .then(len)
+    .then(str)
 )
 
-assert test_pipe(2) == 1
+assert test_pipe_lazy(2) == "1"

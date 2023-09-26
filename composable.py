@@ -15,8 +15,8 @@ Q = ParamSpec("Q")
 class Composable(Generic[P, T]):
     f: Callable[P, T]
 
-    def __rshift__(self, other: Callable[Q, U] | Composable[Q, U]) -> Composable[P, U]:
-        if callable(other):
+    def __rshift__(self, other: Callable[Q, U]) -> Composable[P, U]:
+        if not isinstance(other, Composable):
             other = Composable(other)
         return Composable(compose(self.f, other.f))
 
